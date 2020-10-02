@@ -1,11 +1,18 @@
 stages:
+  - unit_test
   - build
-  - test
-  - publish
-  - deploy
+  - deploy_staging
+  - integration_tests
+  - deploy_production
   
 variables:
   REGISTRY: gcr.io/${CI_PROJECT_PATH}
+
+test:
+  stage: unit_test
+  image: golang:latest
+  script:
+    - go test -i
 
 docker:build:
   stage: build
@@ -14,25 +21,21 @@ docker:build:
     - docker build -t $REGISTRY:${CI_COMMIT_SHA} .
     - docker push $REGISTRY:${CI_COMMIT_SHA}
 
-test:
-  stage: test
-  image: docker:latest
-  needs: ["docker:build"]
-  before_script:
-    - docker pull $REGISTRY:${CI_COMMIT_SHA} || true 
+deploy:
+  stage: deploy_staging
+  image: kiwigrid/gcloud-kubectl-helm:3.2.1-289.0.0-250
   script:
-    - docker run -it $REGISTRY:builder go test -i
-    
-publish:latest:
-  stage: publish
-  before_script:
-    - docker pull $REGISTRY:${CI_COMMIT_SHA}
+    - helm upgrade --create-namespace --wait -i --set image.tag=${CI_COMMIT_SHA} -n demo-app demo-app .helm
+
+test:staging:
+  stage: unit_test
+  image: golang:latest
   script:
-    - docker tag $REGISTRY:${CI_COMMIT_SHA} $REGISTRY:latest
-    - docker push $REGISTRY:latest
+    - echo "Running integration tests"
     
 deploy:
+  stage: deploy_production
   image: kiwigrid/gcloud-kubectl-helm:3.2.1-289.0.0-250
   when: manual
   script:
-    - helm upgrade --create-namespace --wait -i --set image.tag=${CI_COMMIT_SHA} -n demo-app demo-app .helm
+    - helm upgrade --create-namespace --wait -i --set image.tag=${CI_COMMIT_SHA} -n demo-app demo-app .helm    
