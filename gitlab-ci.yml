@@ -10,12 +10,8 @@ variables:
 docker:build:
   stage: build
   image: docker:latest
-  before_script:
-    - docker pull $REGISTRY:builder || true
   script:
-    - docker build --target builder --cache-from=$REGISTRY:builder -t $REGISTRY:builder .
-    - docker build --target runtime-image --cache-from=$REGISTRY:builder -t $REGISTRY:${CI_COMMIT_SHA} .
-    - docker push $REGISTRY:builder
+    - docker build -t $REGISTRY:${CI_COMMIT_SHA} .
     - docker push $REGISTRY:${CI_COMMIT_SHA}
 
 test:
@@ -23,7 +19,7 @@ test:
   image: docker:latest
   needs: ["docker:build"]
   before_script:
-    - docker pull $REGISTRY:builder || true 
+    - docker pull $REGISTRY:${CI_COMMIT_SHA} || true 
   script:
     - docker run -it $REGISTRY:builder go test -i
     
@@ -37,6 +33,6 @@ publish:latest:
     
 deploy:
   image: kiwigrid/gcloud-kubectl-helm:3.2.1-289.0.0-250
-  only:
+  when: manual
   script:
     - helm upgrade --create-namespace --wait -i --set image.tag=${CI_COMMIT_SHA} -n demo-app demo-app .helm
